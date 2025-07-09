@@ -31,7 +31,7 @@ OPENAI_API_KEY=tu_clave_aqui
 1. Obtén tu API key gratuita en [MapTiler](https://www.maptiler.com/cloud/)
 2. Edita el archivo `index.html` y reemplaza `TU_API_KEY_AQUI` con tu clave en la línea 204:
 ```javascript
-const MAPTILER_API_KEY = 'tu_clave_maptiler_aqui';
+const MAPTILER_API_KEY = 'TU_API_KEY_AQUI';
 ```
 
 ### 2. Instalación de dependencias
