@@ -1,4 +1,4 @@
-# 🗺️ Generador y Visualizador de Mapas de Direcciones Madrid
+# 🗺️ Generador y visualizador de mapas de direcciones en Madrid
 
 Este proyecto permite generar direcciones aleatorias en Madrid usando OpenAI y visualizarlas en un mapa interactivo usando MapTiler. El sistema consta de dos partes principales: un notebook de Jupyter para generar las direcciones y un visualizador web para mostrarlas en el mapa.
 
