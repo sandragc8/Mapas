@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mapa de Direcciones de Madrid</title>
+    <script src="https://cdn.maptiler.com/maptiler-sdk-js/v3.2.0/maptiler-sdk.umd.min.js"></script>
+    <link href="https://cdn.maptiler.com/maptiler-sdk-js/v3.2.0/maptiler-sdk.css" rel="stylesheet" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        #map {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        .controls {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 320px;
+            background-color: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            padding: 15px;
+            z-index: 1000;
+            max-height: 90vh;
+            overflow-y: auto;
+            transition: all 0.3s ease;
+        }
+
+        .controls h3 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 18px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+
+        button {
+            padding: 10px 16px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: 500;
+            font-size: 14px;
+            transition: all 0.2s ease;
+            margin-right: 8px;
+            margin-bottom: 5px;
+        }
+
+        #captureMapBtn {
+            background-color: #5cb85c;
+            color: white;
+        }
+
+        #captureMapBtn:hover {
+            background-color: #4cae4c;
+        }
+
+        #status {
+            margin-top: 10px;
+            font-size: 14px;
+            color: #666;
+            font-style: italic;
+        }
+
+        #direcciones-container {
+            margin-top: 15px;
+            max-height: 60vh;
+            overflow-y: auto;
+            border: 1px solid #eee;
+            padding: 10px;
+            font-size: 12px;
+        }
+
+        .direccion-item {
+            padding: 6px;
+            border-bottom: 1px solid #f0f0f0;
+            cursor: pointer;
+        }
+
+        .direccion-item:hover {
+            background-color: #f5f5f5;
+        }
+
+        #legend {
+            position: absolute;
+            bottom: 30px;
+            left: 30px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 10px;
+            border-radius: 8px;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+            z-index: 1000;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+
+        .color-box {
+            width: 20px;
+            height: 20px;
+            margin-right: 10px;
+            border-radius: 4px;
+        }
+
+        .progress-bar-container {
+            width: 100%;
+            height: 10px;
+            background-color: #f0f0f0;
+            border-radius: 5px;
+            margin-top: 10px;
+            overflow: hidden;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background-color: #4a90e2;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        /* Popup de dirección */
+        .mapboxgl-popup {
+            max-width: 300px;
+            font: 12px/20px 'Segoe UI', Arial, Helvetica, sans-serif;
+        }
+
+        .mapboxgl-popup-content {
+            padding: 15px;
+            border-radius: 5px;
+        }
+
+        /* Estilos para versión móvil */
+        @media (max-width: 768px) {
+            .controls {
+                width: calc(100% - 40px);
+                top: auto;
+                bottom: 20px;
+                right: 20px;
+                left: 20px;
+                max-height: 40vh;
+            }
+            
+            #legend {
+                bottom: auto;
+                top: 10px;
+                left: 10px;
+                max-width: 120px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <div class="controls">
+        <h3>Visualizador de Direcciones</h3>
+        <div>
+            <p id="status">Cargando datos automáticamente...</p>
+            <div class="progress-bar-container">
+                <div class="progress-bar" id="progress-bar"></div>
+            </div>
+            <button id="captureMapBtn">Capturar Mapa</button>
+        </div>
+        <div id="direcciones-container" style="display: none;">
+            <h4>Direcciones cargadas: <span id="contador-direcciones">0</span></h4>
+            <div id="direcciones-list"></div>
+        </div>
+    </div>
+
+    <div id="legend" style="display: none;">
+        <h4 style="margin-top: 0;">Densidad</h4>
+        <div class="legend-item">
+            <div class="color-box" style="background-color: rgba(0, 0, 255, 0.7);"></div>
+            <span>Baja</span>
+        </div>
+        <div class="legend-item">
+            <div class="color-box" style="background-color: rgba(0, 255, 0, 0.7);"></div>
+            <span>Media</span>
+        </div>
+        <div class="legend-item">
+            <div class="color-box" style="background-color: rgba(255, 0, 0, 0.7);"></div>
+            <span>Alta</span>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+    
+    <script>
+        // API Key de MapTiler - Tu clave ya configurada
+        const MAPTILER_API_KEY = 'TU_API_KEY_AQUI';
+        maptilersdk.config.apiKey = MAPTILER_API_KEY;
+
+        // Ruta al archivo Excel (en la misma carpeta)
+        const EXCEL_FILE_PATH = 'direcciones_madrid_1000.xlsx';
+
+        // Coordenadas del centro de Madrid
+        const MADRID_CENTER = [-3.70379, 40.416775];
+        
+        // Radio máximo en km (para filtrar direcciones fuera de Madrid)
+        const MAX_RADIUS_KM = 20;
+
+        // Variables globales
+        let map;
+        let statusElement;
+        let progressBar;
+        let locations = [];
+        let geocodedPoints = [];
+        let popup = null;
+        
+        // Inicializar el mapa cuando se carga la página
+        document.addEventListener('DOMContentLoaded', function() {
+            statusElement = document.getElementById('status');
+            progressBar = document.getElementById('progress-bar');
+            
+            // Inicializar el mapa con MapTiler SDK
+            map = new maptilersdk.Map({
+                container: 'map',
+                style: maptilersdk.MapStyle.STREETS,
+                center: MADRID_CENTER,
+                zoom: 12
+            });
+            
+            // Configurar eventos de botones
+            document.getElementById('captureMapBtn').addEventListener('click', captureMap);
+            
+            // Esperar a que el mapa cargue y luego cargar datos automáticamente
+            map.on('load', function() {
+                showStatus('Mapa cargado. Cargando datos automáticamente...');
+                
+                // Cargar datos automáticamente
+                setTimeout(() => cargarDatosAutomaticamente(), 1000);
+            });
+        });
+
+        // Calcular distancia en km entre dos puntos (fórmula de Haversine)
+        function calcularDistanciaEnKm(lat1, lon1, lat2, lon2) {
+            const R = 6371; // Radio de la Tierra en km
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                     Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+                     Math.sin(dLon/2) * Math.sin(dLon/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c;
+        }
+
+        // Mostrar mensajes de estado
+        function showStatus(message) {
+            console.log(message);
+            if (statusElement) {
+                statusElement.textContent = message;
+            }
+        }
+        
+        // Actualizar la barra de progreso
+        function updateProgress(percentage) {
+            if (progressBar) {
+                progressBar.style.width = `${percentage}%`;
+            }
+        }
+        
+        // Cargar datos automáticamente
+        async function cargarDatosAutomaticamente() {
+            showStatus('Cargando el archivo Excel direcciones_madrid2.xlsx...');
+            updateProgress(10);
+            
+            try {
+                // Cargar el archivo Excel usando fetch
+                const response = await fetch(EXCEL_FILE_PATH);
+                
+                if (!response.ok) {
+                    throw new Error(`No se pudo cargar el archivo: ${response.status} ${response.statusText}`);
+                }
+                
+                const arrayBuffer = await response.arrayBuffer();
+                updateProgress(30);
+                
+                // Procesar el archivo Excel
+                const data = await procesarExcel(arrayBuffer);
+                
+                if (!data || data.length === 0) {
+                    throw new Error('No se encontraron datos en el archivo Excel.');
+                }
+                
+                showStatus(`Se encontraron ${data.length} direcciones. Geocodificando...`);
+                updateProgress(40);
+                
+                // Guardar los datos y mostrar direcciones
+                locations = data;
+                
+                // Geocodificar direcciones y mostrar en el mapa
+                await geocodificarDirecciones();
+                
+            } catch (error) {
+                console.error('Error al procesar el archivo:', error);
+                showStatus('Error al procesar el archivo: ' + error.message);
+                updateProgress(0);
+            }
+        }
+        
+        // Procesar archivo Excel
+        function procesarExcel(arrayBuffer) {
+            return new Promise((resolve, reject) => {
+                try {
+                    const data = new Uint8Array(arrayBuffer);
+                    const workbook = XLSX.read(data, {type: 'array'});
+                    
+                    // Tomar la primera hoja del libro
+                    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+                    
+                    // Convertir a JSON
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet);
+                    
+                    console.log('Datos del Excel:', jsonData);
+                    
+                    // Verificar que los datos tienen el formato esperado
+                    const addressData = jsonData.map(row => {
+                        // Verificar que tenemos las columnas necesarias
+                        if (!row['Dirección'] || !row['Ciudad']) {
+                            console.warn('Fila sin dirección o ciudad:', row);
+                            return null;
+                        }
+                        
+                        return {
+                            direccion: row['Dirección'],
+                            ciudad: row['Ciudad']
+                        };
+                    }).filter(item => item !== null);
+                    
+                    resolve(addressData);
+                } catch (error) {
+                    reject(error);
+                }
+            });
+        }
+        
+        // Mostrar todas las direcciones en el panel
+        function mostrarTodasLasDirecciones(puntosFiltrados) {
+            const container = document.getElementById('direcciones-container');
+            const list = document.getElementById('direcciones-list');
+            const contador = document.getElementById('contador-direcciones');
+            
+            // Actualizar contador
+            contador.textContent = puntosFiltrados.length;
+            
+            // Mostrar todas las direcciones con enlaces interactivos
+            list.innerHTML = puntosFiltrados.map((point, idx) => 
+                `<div class="direccion-item" data-index="${idx}" onclick="centrarEnDireccion(${point.coordinates[1]}, ${point.coordinates[0]}, '${point.address.replace(/'/g, "\\'")}')">
+                    <strong>${idx + 1}.</strong> ${point.address}
+                </div>`
+            ).join('');
+            
+            container.style.display = 'block';
+        }
+        
+        // Función para centrar el mapa en una dirección
+        function centrarEnDireccion(lat, lng, direccion) {
+            map.flyTo({
+                center: [lng, lat],
+                zoom: 16,
+                essential: true
+            });
+            
+            // Mostrar popup
+            if (popup) popup.remove();
+            
+            popup = new maptilersdk.Popup()
+                .setLngLat([lng, lat])
+                .setHTML(`<strong>Dirección:</strong><br>${direccion}`)
+                .addTo(map);
+        }
+        
+        // Geocodificar direcciones
+        async function geocodificarDirecciones() {
+            // Limpiar capas existentes
+            clearLayers();
+            
+            geocodedPoints = [];
+            let errores = 0;
+            let fueraDeRadio = 0;
+            
+            showStatus('Geocodificando direcciones...');
+            
+            // Usar un límite de solicitudes por lote para no sobrecargar la API
+            const batchSize = 10;
+            const totalBatches = Math.ceil(locations.length / batchSize);
+            
+            for (let batch = 0; batch < totalBatches; batch++) {
+                const start = batch * batchSize;
+                const end = Math.min((batch + 1) * batchSize, locations.length);
+                const batchLocations = locations.slice(start, end);
+                
+                const batchProgress = Math.round(40 + (batch / totalBatches) * 50);
+                showStatus(`Geocodificando lote ${batch + 1}/${totalBatches}...`);
+                updateProgress(batchProgress);
+                
+                // Crear promesas para todas las geocodificaciones en este lote
+                const promises = batchLocations.map(async (location) => {
+                    try {
+                        // Parsear la dirección para adaptarla al formato de geocodificación
+                        const addressParts = parseAddress(location.direccion);
+                        const query = `${addressParts.street} ${addressParts.number}, ${addressParts.postalCode} ${location.ciudad}`;
+                        
+                        const geocodeResult = await geocode(query);
+                        
+                        if (geocodeResult && geocodeResult.features && geocodeResult.features.length > 0) {
+                            // Usar el primer resultado
+                            const result = geocodeResult.features[0];
+                            
+                            // Verificar si está dentro del radio de Madrid
+                            const [lng, lat] = result.center;
+                            const distancia = calcularDistanciaEnKm(
+                                MADRID_CENTER[1], MADRID_CENTER[0],
+                                lat, lng
+                            );
+                            
+                            if (distancia <= MAX_RADIUS_KM) {
+                                geocodedPoints.push({
+                                    coordinates: result.center,
+                                    address: location.direccion
+                                });
+                                return true;
+                            } else {
+                                console.warn(`Dirección fuera del radio de ${MAX_RADIUS_KM}km: ${location.direccion}`);
+                                fueraDeRadio++;
+                                return false;
+                            }
+                        } else {
+                            console.warn(`No se encontraron resultados para: ${location.direccion}`);
+                            errores++;
+                            return false;
+                        }
+                    } catch (error) {
+                        console.error(`Error geocodificando ${location.direccion}:`, error);
+                        errores++;
+                        return false;
+                    }
+                });
+                
+                // Esperar a que todas las geocodificaciones del lote terminen
+                await Promise.all(promises);
+                
+                // Pequeña pausa entre lotes para evitar límites de tasa
+                if (batch < totalBatches - 1) {
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }
+            }
+            
+            // Mostrar resultados
+            showStatus(`Geocodificación completada: ${geocodedPoints.length} direcciones localizadas, ${errores} errores, ${fueraDeRadio} fuera del radio.`);
+            updateProgress(95);
+            
+            // Mostrar todas las direcciones en el panel
+            mostrarTodasLasDirecciones(geocodedPoints);
+            
+            // Visualizar los puntos en el mapa
+            if (geocodedPoints.length > 0) {
+                visualizarPuntos();
+                updateProgress(100);
+                
+                // Ocultar la barra de progreso después de un tiempo
+                setTimeout(() => {
+                    document.querySelector('.progress-bar-container').style.display = 'none';
+                }, 3000);
+            } else {
+                showStatus('No se pudieron geocodificar las direcciones.');
+                updateProgress(0);
+            }
+        }
+        
+        // Parsear dirección para obtener componentes (calle, número, código postal)
+        function parseAddress(address) {
+            // Formato esperado: "Calle de la Cabeza, 26, 28012 Madrid, España"
+            let street = "";
+            let number = "";
+            let postalCode = "";
+            
+            try {
+                // Intentar extraer el código postal (5 dígitos)
+                const postalCodeMatch = address.match(/\b\d{5}\b/);
+                if (postalCodeMatch) {
+                    postalCode = postalCodeMatch[0];
+                }
+                
+                // Extraer la calle y número
+                const firstCommaIdx = address.indexOf(',');
+                if (firstCommaIdx !== -1) {
+                    street = address.substring(0, firstCommaIdx).trim();
+                    
+                    // Buscar el número después de la calle
+                    const afterComma = address.substring(firstCommaIdx + 1).trim();
+                    const numberMatch = afterComma.match(/^\d+/);
+                    if (numberMatch) {
+                        number = numberMatch[0];
+                    }
+                } else {
+                    street = address;
+                }
+            } catch (e) {
+                console.warn("Error parsing address:", address, e);
+                street = address; // usar la dirección completa como fallback
+            }
+            
+            return { street, number, postalCode };
+        }
+        
+        // Visualizar puntos en el mapa
+        function visualizarPuntos() {
+            if (geocodedPoints.length === 0) {
+                showStatus('No hay puntos para visualizar.');
+                return;
+            }
+            
+            // Crear GeoJSON para los puntos
+            const features = geocodedPoints.map(point => ({
+                type: 'Feature',
+                properties: {
+                    address: point.address
+                },
+                geometry: {
+                    type: 'Point',
+                    coordinates: point.coordinates
+                }
+            }));
+            
+            const geojsonData = {
+                type: 'FeatureCollection',
+                features: features
+            };
+            
+            // Añadir fuente de datos
+            if (map.getSource('locations-source')) {
+                map.removeSource('locations-source');
+            }
+            
+            map.addSource('locations-source', {
+                type: 'geojson',
+                data: geojsonData
+            });
+            
+            // Añadir capa de mapa de calor con degradado
+            map.addLayer({
+                id: 'locations-heat',
+                type: 'heatmap',
+                source: 'locations-source',
+                maxzoom: 18,
+                paint: {
+                    // Peso uniforme para todos los puntos
+                    'heatmap-weight': 1,
+                    
+                    // Intensidad según el nivel de zoom
+                    'heatmap-intensity': [
+                        'interpolate',
+                        ['linear'],
+                        ['zoom'],
+                        8, 1,
+                        16, 3
+                    ],
+                    
+                    // Radio según el nivel de zoom
+                    'heatmap-radius': [
+                        'interpolate',
+                        ['linear'],
+                        ['zoom'],
+                        8, 15,
+                        12, 20,
+                        16, 30
+                    ],
+                    
+                    // Rampa de color para el mapa de calor
+                    'heatmap-color': [
+                        'interpolate',
+                        ['linear'],
+                        ['heatmap-density'],
+                        0, 'rgba(0, 0, 255, 0)',
+                        0.2, 'rgba(0, 0, 255, 0.5)',
+                        0.4, 'rgba(0, 255, 255, 0.7)',
+                        0.6, 'rgba(0, 255, 0, 0.7)',
+                        0.8, 'rgba(255, 255, 0, 0.8)',
+                        1, 'rgba(255, 0, 0, 1)'
+                    ],
+                    
+                    // Opacidad según el nivel de zoom
+                    'heatmap-opacity': 0.8
+                }
+            });
+            
+            // Añadir capa de puntos (visible al hacer zoom)
+            map.addLayer({
+                id: 'locations-point',
+                type: 'circle',
+                source: 'locations-source',
+                minzoom: 14,
+                paint: {
+                    // Radio del círculo
+                    'circle-radius': [
+                        'interpolate',
+                        ['linear'],
+                        ['zoom'],
+                        14, 4,
+                        16, 8
+                    ],
+                    
+                    // Color del círculo
+                    'circle-color': 'rgb(255, 0, 0)',
+                    
+                    // Opacidad según el nivel de zoom
+                    'circle-opacity': [
+                        'interpolate',
+                        ['linear'],
+                        ['zoom'],
+                        14, 0.3,
+                        16, 0.7
+                    ],
+                    
+                    // Borde del círculo
+                    'circle-stroke-width': 1,
+                    'circle-stroke-color': 'white'
+                }
+            });
+            
+            // Añadir evento de clic para mostrar la información de la dirección
+            map.on('click', 'locations-point', function(e) {
+                const coords = e.features[0].geometry.coordinates.slice();
+                const address = e.features[0].properties.address;
+                
+                // Crear nuevo popup
+                if (popup) popup.remove();
+                
+                popup = new maptilersdk.Popup()
+                    .setLngLat(coords)
+                    .setHTML(`<strong>Dirección:</strong><br>${address}`)
+                    .addTo(map);
+            });
+            
+            // Cambiar cursor al pasar por encima de un punto
+            map.on('mouseenter', 'locations-point', function() {
+                map.getCanvas().style.cursor = 'pointer';
+            });
+            
+            // Restaurar cursor al salir de un punto
+            map.on('mouseleave', 'locations-point', function() {
+                map.getCanvas().style.cursor = '';
+            });
+            
+            // Hacer zoom para ver todos los puntos
+            zoomToFeatures(geojsonData);
+            
+            // Mostrar la leyenda
+            document.getElementById('legend').style.display = 'block';
+        }
+        
+        // Función para hacer zoom y centrar el mapa en todos los elementos
+        function zoomToFeatures(data) {
+            if (!data || !data.features || data.features.length === 0) return;
+            
+            // Calcular el bounds (límites) que incluya todos los elementos
+            const bounds = new maptilersdk.LngLatBounds();
+            
+            data.features.forEach(feature => {
+                if (feature.geometry && feature.geometry.coordinates) {
+                    bounds.extend(feature.geometry.coordinates);
+                }
+            });
+            
+            // Ajustar el mapa para mostrar todos los elementos
+            map.fitBounds(bounds, {
+                padding: 50, // Padding alrededor de los límites
+                maxZoom: 16  // Zoom máximo
+            });
+        }
+
+        // Geocodificar una dirección usando la API de MapTiler
+        async function geocode(query) {
+            try {
+                const encodedQuery = encodeURIComponent(query);
+                const url = `https://api.maptiler.com/geocoding/${encodedQuery}.json?key=${MAPTILER_API_KEY}`;
+                
+                const response = await fetch(url);
+                return await response.json();
+            } catch (error) {
+                console.error('Error en geocodificación:', error);
+                throw error;
+            }
+        }
+
+        // Limpiar las capas existentes
+        function clearLayers() {
+            // Eliminar capas
+            ['locations-heat', 'locations-point', 'locations-label'].forEach(layerId => {
+                if (map.getLayer(layerId)) {
+                    map.removeLayer(layerId);
+                }
+            });
+            
+            // Eliminar fuentes
+            if (map.getSource('locations-source')) {
+                map.removeSource('locations-source');
+            }
+            
+            // Eliminar popup si existe
+            if (popup) {
+                popup.remove();
+                popup = null;
+            }
+        }
+
+        // Capturar el mapa como imagen
+        function captureMap() {
+            showStatus('Preparando captura del mapa...');
+            
+            // Ocultar controles para la captura
+            const controls = document.querySelector('.controls');
+            const legend = document.getElementById('legend');
+            controls.style.display = 'none';
+            legend.style.display = 'none';
+            
+            // Eliminar popup si existe
+            if (popup) {
+                popup.remove();
+                popup = null;
+            }
+            
+            // Esperar a que se actualice el DOM
+            setTimeout(async () => {
+                try {
+                    // Intenta primero con el método nativo de MapTiler
+                    captureMapAlternative();
+                } catch (error) {
+                    console.error('Error con método nativo:', error);
+                    showStatus('Intentando método alternativo...');
+                    
+                    try {
+                        // Obtener el elemento del mapa
+                        const mapContainer = document.getElementById('map');
+                        
+                        // Configuración para html2canvas
+                        const canvas = await html2canvas(mapContainer, {
+                            useCORS: true,
+                            allowTaint: true,
+                            foreignObjectRendering: true,
+                            logging: false,
+                            scale: window.devicePixelRatio || 1
+                        });
+                        
+                        // Crear un enlace para descargar la imagen
+                        const link = document.createElement('a');
+                        link.href = canvas.toDataURL('image/png');
+                        link.download = `mapa_madrid_${new Date().toISOString().split('T')[0]}.png`;
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                        
+                        showStatus('Imagen capturada y descargada.');
+                    } catch (altError) {
+                        console.error('Error con método html2canvas:', altError);
+                        
+                        if (confirm('No se pudo generar la imagen. ¿Quieres ocultar los controles para hacer una captura manual?')) {
+                            showStatus('Haz una captura de pantalla y luego recarga la página');
+                        } else {
+                            controls.style.display = 'block';
+                            legend.style.display = 'block';
+                        }
+                    }
+                } finally {
+                    // Restaurar controles después de un breve retraso
+                    setTimeout(() => {
+                        controls.style.display = 'block';
+                        legend.style.display = 'block';
+                    }, 500);
+                }
+            }, 500);
+        }
+
+        // Método alternativo para capturar el mapa
+        function captureMapAlternative() {
+            showStatus('Capturando mapa usando la API nativa...');
+            
+            try {
+                // Obtener el lienzo del mapa
+                const mapCanvas = map.getCanvas();
+                
+                if (!mapCanvas) {
+                    throw new Error('No se pudo obtener el canvas del mapa');
+                }
+                
+                // Crear una nueva imagen a partir del lienzo del mapa
+                const dataURL = mapCanvas.toDataURL('image/png');
+                
+                // Crear un enlace para descargar la imagen
+                const link = document.createElement('a');
+                link.href = dataURL;
+                link.download = `mapa_madrid_${new Date().toISOString().split('T')[0]}.png`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                
+                showStatus('Imagen capturada y descargada correctamente.');
+            } catch (error) {
+                console.error('Error al capturar el mapa con método alternativo:', error);
+                throw error;
+            }
+        }
+
+        // Exponer la función centrarEnDireccion para uso global
+        window.centrarEnDireccion = centrarEnDireccion;
+    </script>
+</body>
+</html>
